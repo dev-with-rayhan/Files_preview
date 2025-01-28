@@ -1,5 +1,5 @@
-﻿// Copyright (c) 2024 Files Community
-// Licensed under the MIT License. See the LICENSE.
+﻿// Copyright (c) Files Community
+// Licensed under the MIT License.
 
 using Files.Shared.Helpers;
 using Microsoft.Extensions.Logging;
@@ -16,11 +16,12 @@ namespace Files.App.Utils.Shell
 	/// </summary>
 	public static class LaunchHelper
 	{
-		public static void LaunchSettings(string page)
+		public unsafe static void LaunchSettings(string page)
 		{
-			var appActiveManager = new IApplicationActivationManager();
+			using ComPtr<IApplicationActivationManager> pApplicationActivationManager = default;
+			pApplicationActivationManager.CoCreateInstance<Shell32.ApplicationActivationManager>();
 
-			appActiveManager.ActivateApplication(
+			pApplicationActivationManager.Get()->ActivateApplication(
 				"windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel",
 				page,
 				ACTIVATEOPTIONS.AO_NONE,
@@ -203,8 +204,8 @@ namespace Files.App.Utils.Shell
 								if (!hFileSrc.IsInvalid && !hFileDst.IsInvalid)
 								{
 									// Copy ADS to temp folder and open
-									using (var inStream = new FileStream(hFileSrc.DangerousGetHandle(), FileAccess.Read))
-									using (var outStream = new FileStream(hFileDst.DangerousGetHandle(), FileAccess.Write))
+									await using (var inStream = new FileStream(hFileSrc.DangerousGetHandle(), FileAccess.Read))
+									await using (var outStream = new FileStream(hFileDst.DangerousGetHandle(), FileAccess.Write))
 									{
 										await inStream.CopyToAsync(outStream);
 										await outStream.FlushAsync();

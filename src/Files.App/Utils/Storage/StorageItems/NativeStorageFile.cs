@@ -1,5 +1,5 @@
-// Copyright (c) 2024 Files Community
-// Licensed under the MIT License. See the LICENSE.
+// Copyright (c) Files Community
+// Licensed under the MIT License.
 
 using Files.Shared.Helpers;
 using System.IO;
@@ -83,8 +83,8 @@ namespace Files.App.Utils.Storage
 				else
 				{
 					destFile.CreateFile();
-					using (var inStream = await this.OpenStreamForReadAsync())
-					using (var outStream = await destFile.OpenStreamForWriteAsync())
+					await using (var inStream = await this.OpenStreamForReadAsync())
+					await using (var outStream = await destFile.OpenStreamForWriteAsync())
 					{
 						await inStream.CopyToAsync(outStream);
 						await outStream.FlushAsync();
@@ -248,8 +248,8 @@ namespace Files.App.Utils.Storage
 				else
 				{
 					destFile.CreateFile();
-					using (var inStream = await this.OpenStreamForReadAsync())
-					using (var outStream = await destFile.OpenStreamForWriteAsync())
+					await using (var inStream = await this.OpenStreamForReadAsync())
+					await using (var outStream = await destFile.OpenStreamForWriteAsync())
 					{
 						await inStream.CopyToAsync(outStream);
 						await outStream.FlushAsync();

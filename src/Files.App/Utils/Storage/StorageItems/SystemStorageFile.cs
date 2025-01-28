@@ -1,5 +1,5 @@
-// Copyright (c) 2024 Files Community
-// Licensed under the MIT License. See the LICENSE.
+// Copyright (c) Files Community
+// Licensed under the MIT License.
 
 using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -69,14 +69,14 @@ namespace Files.App.Utils.Storage
 					}
 					else if (destFolder is ICreateFileWithStream cwsf)
 					{
-						using var inStream = await this.OpenStreamForReadAsync();
+						await using var inStream = await this.OpenStreamForReadAsync();
 						return await cwsf.CreateFileAsync(inStream, desiredNewName, option.Convert());
 					}
 					else
 					{
 						var destFile = await destFolder.CreateFileAsync(desiredNewName, option.Convert());
-						using (var inStream = await this.OpenStreamForReadAsync())
-						using (var outStream = await destFile.OpenStreamForWriteAsync())
+						await using (var inStream = await this.OpenStreamForReadAsync())
+						await using (var outStream = await destFile.OpenStreamForWriteAsync())
 						{
 							await inStream.CopyToAsync(outStream);
 							await outStream.FlushAsync();
@@ -93,8 +93,8 @@ namespace Files.App.Utils.Storage
 							option == NameCollisionOption.ReplaceExisting);
 						if (!hFile.IsInvalid)
 						{
-							using (var inStream = await this.OpenStreamForReadAsync())
-							using (var outStream = new FileStream(hFile, FileAccess.Write))
+							await using (var inStream = await this.OpenStreamForReadAsync())
+							await using (var outStream = new FileStream(hFile, FileAccess.Write))
 							{
 								await inStream.CopyToAsync(outStream);
 								await outStream.FlushAsync();
@@ -140,8 +140,8 @@ namespace Files.App.Utils.Storage
 		{
 			return AsyncInfo.Run(async (cancellationToken) =>
 			{
-				using var inStream = await this.OpenStreamForReadAsync();
-				using var outStream = await fileToReplace.OpenStreamForWriteAsync();
+				await using var inStream = await this.OpenStreamForReadAsync();
+				await using var outStream = await fileToReplace.OpenStreamForWriteAsync();
 
 				await inStream.CopyToAsync(outStream);
 				await outStream.FlushAsync();
@@ -151,8 +151,8 @@ namespace Files.App.Utils.Storage
 		{
 			return AsyncInfo.Run(async (cancellationToken) =>
 			{
-				using var inStream = await this.OpenStreamForReadAsync();
-				using var outStream = await fileToReplace.OpenStreamForWriteAsync();
+				await using var inStream = await this.OpenStreamForReadAsync();
+				await using var outStream = await fileToReplace.OpenStreamForWriteAsync();
 
 				await inStream.CopyToAsync(outStream);
 				await outStream.FlushAsync();

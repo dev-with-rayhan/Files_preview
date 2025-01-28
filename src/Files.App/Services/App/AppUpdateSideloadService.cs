@@ -1,5 +1,5 @@
-// Copyright (c) 2024 Files Community
-// Licensed under the MIT License. See the LICENSE.
+// Copyright (c) Files Community
+// Licensed under the MIT License.
 
 using CommunityToolkit.WinUI.Helpers;
 using Microsoft.Extensions.Logging;
@@ -134,8 +134,8 @@ namespace Files.App.Services
 
 				if (File.Exists(destHashFilePath))
 				{
-					using var srcStream = (await srcHashFile.OpenReadAsync()).AsStream();
-					using var destStream = File.OpenRead(destHashFilePath);
+					await using var srcStream = (await srcHashFile.OpenReadAsync()).AsStream();
+					await using var destStream = File.OpenRead(destHashFilePath);
 
 					hashEqual = HashEqual(srcStream, destStream);
 				}

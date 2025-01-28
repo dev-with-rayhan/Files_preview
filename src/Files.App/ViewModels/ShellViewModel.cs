@@ -1,5 +1,5 @@
-// Copyright (c) 2024 Files Community
-// Licensed under the MIT License. See the LICENSE.
+// Copyright (c) Files Community
+// Licensed under the MIT License.
 
 using Files.App.Services.SizeProvider;
 using Files.Shared.Helpers;
@@ -21,6 +21,8 @@ using Windows.Storage.Search;
 using static Files.App.Helpers.Win32PInvoke;
 using DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue;
 using FileAttributes = System.IO.FileAttributes;
+using ByteSize = ByteSizeLib.ByteSize;
+using Windows.Win32.System.SystemServices;
 
 namespace Files.App.ViewModels
 {
@@ -40,7 +42,7 @@ namespace Files.App.ViewModels
 		private readonly AsyncManualResetEvent gitChangedEvent;
 		private readonly DispatcherQueue dispatcherQueue;
 		private readonly JsonElement defaultJson = JsonSerializer.SerializeToElement("{}");
-		private readonly string folderTypeTextLocalized = "Folder".GetLocalizedResource();
+		private readonly string folderTypeTextLocalized = Strings.Folder.GetLocalizedResource();
 
 		private Task? aProcessQueueAction;
 		private Task? gitProcessQueueAction;
@@ -122,7 +124,7 @@ namespace Files.App.ViewModels
 				{
 					filesAndFolders.ToList().ForEach(async item =>
 					{
-						if (item is GitItem gitItem &&
+						if (item is IGitItem gitItem &&
 							(!gitItem.StatusPropertiesInitialized && value is GitProperties.All or GitProperties.Status
 							|| !gitItem.CommitPropertiesInitialized && value is GitProperties.All or GitProperties.Commit))
 						{
@@ -610,7 +612,7 @@ namespace Files.App.ViewModels
 						if (e.ValueState is SizeChangedValueState.None)
 						{
 							matchingItem.FileSizeBytes = 0;
-							matchingItem.FileSize = "ItemSizeNotCalculated".GetLocalizedResource();
+							matchingItem.FileSize = Strings.ItemSizeNotCalculated.GetLocalizedResource();
 						}
 						else if (e.ValueState is SizeChangedValueState.Final || (long)e.NewSize > matchingItem.FileSizeBytes)
 						{
@@ -973,8 +975,11 @@ namespace Files.App.ViewModels
 		private async Task LoadThumbnailAsync(ListedItem item, CancellationToken cancellationToken)
 		{
 			var loadNonCachedThumbnail = false;
-			var thumbnailSize = folderSettings.GetRoundedIconSize();
+			var thumbnailSize = LayoutSizeKindHelper.GetIconSize(folderSettings.LayoutMode);
 			var returnIconOnly = UserSettingsService.FoldersSettingsService.ShowThumbnails == false || thumbnailSize < 48;
+
+			// TODO Remove this property when all the layouts can support different icon sizes
+			var useCurrentScale = folderSettings.LayoutMode == FolderLayoutModes.DetailsView || folderSettings.LayoutMode == FolderLayoutModes.ListView || folderSettings.LayoutMode == FolderLayoutModes.ColumnView || folderSettings.LayoutMode == FolderLayoutModes.CardsView;
 
 			byte[]? result = null;
 
@@ -988,7 +993,7 @@ namespace Files.App.ViewModels
 							item.ItemPath,
 							thumbnailSize,
 							item.IsFolder,
-							IconOptions.ReturnThumbnailOnly | IconOptions.ReturnOnlyIfCached);
+							IconOptions.ReturnThumbnailOnly | IconOptions.ReturnOnlyIfCached | (useCurrentScale ? IconOptions.UseCurrentScale : IconOptions.None));
 
 					cancellationToken.ThrowIfCancellationRequested();
 					loadNonCachedThumbnail = true;
@@ -1001,7 +1006,7 @@ namespace Files.App.ViewModels
 							item.ItemPath,
 							thumbnailSize,
 							item.IsFolder,
-							IconOptions.ReturnIconOnly);
+							IconOptions.ReturnIconOnly | (useCurrentScale ? IconOptions.UseCurrentScale : IconOptions.None));
 
 					cancellationToken.ThrowIfCancellationRequested();
 				}
@@ -1013,7 +1018,7 @@ namespace Files.App.ViewModels
 						item.ItemPath,
 						thumbnailSize,
 						item.IsFolder,
-						returnIconOnly ? IconOptions.ReturnIconOnly : IconOptions.None);
+						(returnIconOnly ? IconOptions.ReturnIconOnly : IconOptions.None) | (useCurrentScale ? IconOptions.UseCurrentScale : IconOptions.None));
 
 				cancellationToken.ThrowIfCancellationRequested();
 			}
@@ -1059,7 +1064,7 @@ namespace Files.App.ViewModels
 								item.ItemPath,
 								thumbnailSize,
 								item.IsFolder,
-								IconOptions.ReturnThumbnailOnly);
+								IconOptions.ReturnThumbnailOnly | (useCurrentScale ? IconOptions.UseCurrentScale : IconOptions.None));
 					}
 					finally
 					{
@@ -1137,7 +1142,8 @@ namespace Files.App.ViewModels
 								var syncStatus = await CheckCloudDriveSyncStatusAsync(matchingStorageFile);
 								var fileFRN = await FileTagsHelper.GetFileFRN(matchingStorageFile);
 								var fileTag = FileTagsHelper.ReadFileTag(item.ItemPath);
-								var itemType = (item.ItemType == "Folder".GetLocalizedResource()) ? item.ItemType : matchingStorageFile.DisplayType;
+								var itemType = (item.ItemType == Strings.Folder.GetLocalizedResource()) ? item.ItemType : matchingStorageFile.DisplayType;
+								var extraProperties = await GetExtraProperties(matchingStorageFile);
 
 								cts.Token.ThrowIfCancellationRequested();
 
@@ -1149,6 +1155,27 @@ namespace Files.App.ViewModels
 									item.FileFRN = fileFRN;
 									item.FileTags = fileTag;
 									item.IsElevationRequired = CheckElevationRights(item);
+									item.ImageDimensions = extraProperties?.Result["System.Image.Dimensions"]?.ToString() ?? string.Empty;
+									item.FileVersion = extraProperties?.Result["System.FileVersion"]?.ToString() ?? string.Empty;
+									item.MediaDuration = ulong.TryParse(extraProperties?.Result["System.Media.Duration"]?.ToString(), out ulong duration)
+											? TimeSpan.FromTicks((long)duration).ToString(@"hh\:mm\:ss")
+											: string.Empty;
+
+									switch (true)
+									{
+										case var _ when !string.IsNullOrEmpty(item.ImageDimensions):
+											item.ContextualProperty = $"{Strings.PropertyDimensions.GetLocalizedResource()}: {item.ImageDimensions}";
+											break;
+										case var _ when !string.IsNullOrEmpty(item.MediaDuration):
+											item.ContextualProperty = $"{Strings.PropertyDuration.GetLocalizedResource()}: {item.MediaDuration}";
+											break;
+										case var _ when !string.IsNullOrEmpty(item.FileVersion):
+											item.ContextualProperty = $"{Strings.PropertyVersion.GetLocalizedResource()}: {item.FileVersion}";
+											break;
+										default:
+											item.ContextualProperty = $"{Strings.Modified.GetLocalizedResource()}: {item.ItemDateModified}";
+											break;
+									}
 								},
 								Microsoft.UI.Dispatching.DispatcherQueuePriority.Low);
 
@@ -1183,7 +1210,9 @@ namespace Files.App.ViewModels
 								var syncStatus = await CheckCloudDriveSyncStatusAsync(matchingStorageFolder);
 								var fileFRN = await FileTagsHelper.GetFileFRN(matchingStorageFolder);
 								var fileTag = FileTagsHelper.ReadFileTag(item.ItemPath);
-								var itemType = (item.ItemType == "Folder".GetLocalizedResource()) ? item.ItemType : matchingStorageFolder.DisplayType;
+								var itemType = (item.ItemType == Strings.Folder.GetLocalizedResource()) ? item.ItemType : matchingStorageFolder.DisplayType;
+								var extraProperties = await GetExtraProperties(matchingStorageFolder);
+
 								cts.Token.ThrowIfCancellationRequested();
 
 								await dispatcherQueue.EnqueueOrInvokeAsync(() =>
@@ -1193,6 +1222,30 @@ namespace Files.App.ViewModels
 									item.SyncStatusUI = CloudDriveSyncStatusUI.FromCloudDriveSyncStatus(syncStatus);
 									item.FileFRN = fileFRN;
 									item.FileTags = fileTag;
+
+									if (extraProperties is not null)
+									{
+										// Drive Storage Details
+										if (extraProperties.Result["System.SFGAOFlags"] is uint attributesRaw &&
+											extraProperties.Result["System.Capacity"] is ulong capacityRaw &&
+											extraProperties.Result["System.FreeSpace"] is ulong freeSpaceRaw &&
+											((SFGAO_FLAGS)attributesRaw).HasFlag(SFGAO_FLAGS.SFGAO_REMOVABLE) &&
+											!((SFGAO_FLAGS)attributesRaw).HasFlag(SFGAO_FLAGS.SFGAO_FILESYSTEM))
+										{
+											var maxSpace = ByteSize.FromBytes(capacityRaw);
+											var freeSpace = ByteSize.FromBytes(freeSpaceRaw);
+
+											item.MaxSpace = maxSpace;
+											item.SpaceUsed = maxSpace - freeSpace;
+											item.FileSize = string.Format(Strings.DriveFreeSpaceAndCapacity.GetLocalizedResource(), freeSpace.ToSizeString(), maxSpace.ToSizeString());
+											item.ShowDriveStorageDetails = true;
+										}
+
+									}
+									else
+									{
+										item.ContextualProperty = $"{Strings.Modified.GetLocalizedResource()}: {item.ItemDateModified}";
+									}
 								},
 								Microsoft.UI.Dispatching.DispatcherQueuePriority.Low);
 
@@ -1273,7 +1326,7 @@ namespace Files.App.ViewModels
 			return WindowsSecurityService.IsElevationRequired(item.IsShortcut ? ((ShortcutItem)item).TargetPath : item.ItemPath);
 		}
 
-		public async Task LoadGitPropertiesAsync(GitItem gitItem)
+		public async Task LoadGitPropertiesAsync(IGitItem gitItem)
 		{
 			var getStatus = EnabledGitProperties is GitProperties.All or GitProperties.Status && !gitItem.StatusPropertiesInitialized;
 			var getCommit = EnabledGitProperties is GitProperties.All or GitProperties.Commit && !gitItem.CommitPropertiesInitialized;
@@ -1585,23 +1638,23 @@ namespace Files.App.ViewModels
 				else if (res == FileSystemStatusCode.Unauthorized)
 				{
 					await DialogDisplayHelper.ShowDialogAsync(
-						"AccessDenied".GetLocalizedResource(),
-						"AccessDeniedToFolder".GetLocalizedResource());
+						Strings.AccessDenied.GetLocalizedResource(),
+						Strings.AccessDeniedToFolder.GetLocalizedResource());
 
 					return -1;
 				}
 				else if (res == FileSystemStatusCode.NotFound)
 				{
 					await DialogDisplayHelper.ShowDialogAsync(
-						"FolderNotFoundDialog/Title".GetLocalizedResource(),
-						"FolderNotFoundDialog/Text".GetLocalizedResource());
+						Strings.FolderNotFoundDialog_Title.GetLocalizedResource(),
+						Strings.FolderNotFoundDialog_Text.GetLocalizedResource());
 
 					return -1;
 				}
 				else
 				{
 					await DialogDisplayHelper.ShowDialogAsync(
-						"DriveUnpluggedDialog/Title".GetLocalizedResource(),
+						Strings.DriveUnpluggedDialog_Title.GetLocalizedResource(),
 						res.ErrorCode.ToString());
 
 					return -1;
@@ -1702,7 +1755,7 @@ namespace Files.App.ViewModels
 
 				if (hFile == IntPtr.Zero)
 				{
-					await DialogDisplayHelper.ShowDialogAsync("DriveUnpluggedDialog/Title".GetLocalizedResource(), "");
+					await DialogDisplayHelper.ShowDialogAsync(Strings.DriveUnpluggedDialog_Title.GetLocalizedResource(), "");
 
 					return -1;
 				}
@@ -1714,8 +1767,8 @@ namespace Files.App.ViewModels
 					if (filesAndFolders.Count == 0 && errorCode == 0x5)
 					{
 						await DialogDisplayHelper.ShowDialogAsync(
-							"AccessDenied".GetLocalizedResource(),
-							"AccessDeniedToFolder".GetLocalizedResource());
+							Strings.AccessDenied.GetLocalizedResource(),
+							Strings.AccessDeniedToFolder.GetLocalizedResource());
 
 						return -1;
 					}
@@ -1903,6 +1956,17 @@ namespace Files.App.ViewModels
 				return CloudDriveSyncStatus.Unknown;
 
 			return (CloudDriveSyncStatus)syncStatus;
+		}
+
+		private async Task<FilesystemResult<IDictionary<string, object>>?> GetExtraProperties(IStorageItem matchingStorageItem)
+		{
+			if (matchingStorageItem is BaseStorageFile file && file.Properties != null)
+				return await FilesystemTasks.Wrap(() => file.Properties.RetrievePropertiesAsync(["System.Image.Dimensions", "System.Media.Duration", "System.FileVersion"]).AsTask());
+
+			else if (matchingStorageItem is BaseStorageFolder folder && folder.Properties != null)
+				return await FilesystemTasks.Wrap(() => folder.Properties.RetrievePropertiesAsync(["System.FreeSpace", "System.Capacity", "System.SFGAOFlags"]).AsTask());
+
+			return null;
 		}
 
 		private async Task WatchForStorageFolderChangesAsync(BaseStorageFolder? rootFolder)
@@ -2585,7 +2649,7 @@ namespace Files.App.ViewModels
 					await dispatcherQueue.EnqueueOrInvokeAsync(() => item.ItemDateModifiedReal = item.ItemDateModifiedReal);
 				if (item is RecycleBinItem recycleBinItem && (isFormatChange || IsDateDiff(recycleBinItem.ItemDateDeletedReal)))
 					await dispatcherQueue.EnqueueOrInvokeAsync(() => recycleBinItem.ItemDateDeletedReal = recycleBinItem.ItemDateDeletedReal);
-				if (item is GitItem gitItem && gitItem.GitLastCommitDate is DateTimeOffset offset && (isFormatChange || IsDateDiff(offset)))
+				if (item is IGitItem gitItem && gitItem.GitLastCommitDate is DateTimeOffset offset && (isFormatChange || IsDateDiff(offset)))
 					await dispatcherQueue.EnqueueOrInvokeAsync(() => gitItem.GitLastCommitDate = gitItem.GitLastCommitDate);
 			});
 		}

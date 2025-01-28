@@ -1,5 +1,5 @@
-﻿// Copyright (c) 2024 Files Community
-// Licensed under the MIT License. See the LICENSE.
+﻿// Copyright (c) Files Community
+// Licensed under the MIT License.
 
 using Files.Shared.Helpers;
 using System.IO;
@@ -83,7 +83,7 @@ namespace Files.App.ViewModels.Properties
 				{
 					try
 					{
-						using (var stream = File.OpenRead(_item.ItemPath))
+						await using (var stream = File.OpenRead(_item.ItemPath))
 						{
 							hashInfoItem.HashValue = hashInfoItem.Algorithm switch
 							{

@@ -1,5 +1,5 @@
-// Copyright (c) 2024 Files Community
-// Licensed under the MIT License. See the LICENSE.
+// Copyright (c) Files Community
+// Licensed under the MIT License.
 
 using CommunityToolkit.WinUI.UI.Controls;
 using Microsoft.UI.Input;
@@ -356,6 +356,12 @@ namespace Files.App.Views
 				GetPane(0)?.Focus(FocusState.Programmatic);
 		}
 
+		/// <inheritdoc/>
+		public IEnumerable<ModernShellPage> GetPanes()
+		{
+			return RootGrid.Children.Where(x => RootGrid.Children.IndexOf(x) % 2 == 0).Cast<ModernShellPage>();
+		}
+
 		// Private methods
 
 		private ModernShellPage? GetPane(int index = -1)
@@ -370,11 +376,6 @@ namespace Files.App.Views
 		private int GetPaneCount()
 		{
 			return (RootGrid.Children.Count + 1) / 2;
-		}
-
-		private IEnumerable<ModernShellPage> GetPanes()
-		{
-			return RootGrid.Children.Where(x => RootGrid.Children.IndexOf(x) % 2 == 0).Cast<ModernShellPage>();
 		}
 
 		private IEnumerable<GridSplitter> GetSizers()
@@ -646,7 +647,8 @@ namespace Files.App.Views
 
 		private void Pane_PointerPressed(object sender, PointerRoutedEventArgs e)
 		{
-			(sender as UIElement)?.Focus(FocusState.Pointer);
+			if (sender != ActivePane && sender is IShellPage shellPage && shellPage.SlimContentPage is not ColumnsLayoutPage)
+				(sender as UIElement)?.Focus(FocusState.Pointer);
 		}
 
 		private void Pane_GotFocus(object sender, RoutedEventArgs e)
