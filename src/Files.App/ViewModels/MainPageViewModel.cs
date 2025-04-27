@@ -15,7 +15,7 @@ namespace Files.App.ViewModels
 	/// <summary>
 	/// Represents ViewModel of <see cref="MainPage"/>.
 	/// </summary>
-	public sealed class MainPageViewModel : ObservableObject
+	public sealed partial class MainPageViewModel : ObservableObject
 	{
 		// Dependency injections
 
@@ -25,6 +25,9 @@ namespace Files.App.ViewModels
 		private IUserSettingsService UserSettingsService { get; } = Ioc.Default.GetRequiredService<IUserSettingsService>();
 		private IResourcesService ResourcesService { get; } = Ioc.Default.GetRequiredService<IResourcesService>();
 		private DrivesViewModel DrivesViewModel { get; } = Ioc.Default.GetRequiredService<DrivesViewModel>();
+		public ShelfViewModel ShelfViewModel { get; } = Ioc.Default.GetRequiredService<ShelfViewModel>();
+
+		private readonly IContentPageContext context = Ioc.Default.GetRequiredService<IContentPageContext>();
 
 		// Properties
 
@@ -96,8 +99,16 @@ namespace Files.App.ViewModels
 		public HorizontalAlignment AppThemeBackgroundImageHorizontalAlignment
 			=> AppearanceSettingsService.AppThemeBackgroundImageHorizontalAlignment;
 
-		public bool ShowToolbar
-			=> AppearanceSettingsService.ShowToolbar;
+		public bool ShowToolbar =>
+			AppearanceSettingsService.ShowToolbar &&
+			context.PageType is not ContentPageTypes.Home &&
+			context.PageType is not ContentPageTypes.ReleaseNotes &&
+			context.PageType is not ContentPageTypes.Settings;
+		
+		public bool ShowStatusBar =>
+			context.PageType is not ContentPageTypes.Home &&
+			context.PageType is not ContentPageTypes.ReleaseNotes &&
+			context.PageType is not ContentPageTypes.Settings;
 
 
 		// Commands
@@ -131,6 +142,17 @@ namespace Files.App.ViewModels
 						break;
 					case nameof(AppearanceSettingsService.ShowToolbar):
 						OnPropertyChanged(nameof(ShowToolbar));
+						break;
+				}
+			};
+
+			context.PropertyChanged += (s, e) =>
+			{
+				switch (e.PropertyName)
+				{
+					case nameof(context.PageType):
+						OnPropertyChanged(nameof(ShowToolbar));
+						OnPropertyChanged(nameof(ShowStatusBar));
 						break;
 				}
 			};

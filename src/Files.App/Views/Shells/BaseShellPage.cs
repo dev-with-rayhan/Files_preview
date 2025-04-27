@@ -47,7 +47,7 @@ namespace Files.App.Views.Shells
 
 		protected readonly ICommandManager commands = Ioc.Default.GetRequiredService<ICommandManager>();
 
-		public AddressToolbarViewModel ToolbarViewModel { get; } = new AddressToolbarViewModel();
+		public NavigationToolbarViewModel ToolbarViewModel { get; } = new NavigationToolbarViewModel();
 
 		public IBaseLayoutPage SlimContentPage => ContentPage;
 
@@ -185,7 +185,6 @@ namespace Files.App.Views.Shells
 			ToolbarViewModel.AddressBarTextEntered += ShellPage_AddressBarTextEntered;
 			ToolbarViewModel.PathBoxItemDropped += ShellPage_PathBoxItemDropped;
 
-			ToolbarViewModel.RefreshRequested += ShellPage_RefreshRequested;
 			ToolbarViewModel.EditModeEnabled += NavigationToolbar_EditModeEnabled;
 			ToolbarViewModel.ItemDraggedOverPathItem += ShellPage_NavigationRequested;
 			ToolbarViewModel.PathBoxQuerySubmitted += NavigationToolbar_QuerySubmitted;
@@ -234,7 +233,7 @@ namespace Files.App.Views.Shells
 			if (ContentPage is null)
 				return;
 
-			var directoryItemCountLocalization = "Items".GetLocalizedFormatResource(ShellViewModel.FilesAndFolders.Count);
+			var directoryItemCountLocalization = Strings.Items.GetLocalizedFormatResource(ShellViewModel.FilesAndFolders.Count);
 
 			BranchItem? headBranch = headBranch = InstanceViewModel.IsGitRepository
 					? await GitHelpers.GetRepositoryHead(InstanceViewModel.GitRepositoryPath)
@@ -377,11 +376,6 @@ namespace Files.App.Views.Shells
 			{
 				sender.AddRecentQueries();
 			}
-		}
-
-		protected async void ShellPage_RefreshRequested(object sender, EventArgs e)
-		{
-			await Refresh_Click();
 		}
 
 		protected void AppSettings_SortDirectionPreferenceUpdated(object sender, SortDirection e)
@@ -562,6 +556,12 @@ namespace Files.App.Views.Shells
 				ToolbarViewModel.CanRefresh = false;
 				ShellViewModel?.RefreshItems(null);
 			}
+			else if (ItemDisplay.Content is HomePage homePage)
+			{
+				ToolbarViewModel.CanRefresh = false;
+				await homePage.ViewModel.RefreshWidgetProperties();
+				ToolbarViewModel.CanRefresh = true;
+			}
 		}
 
 		public virtual void Back_Click()
@@ -587,7 +587,9 @@ namespace Files.App.Views.Shells
 			foreach (PageStackEntry entry in ItemDisplay.BackStack.ToList())
 			{
 				if (entry.Parameter is NavigationArguments args &&
-					args.NavPathParam is not null and not "Home")
+					args.NavPathParam is not null and not "Home" &&
+					args.NavPathParam is not null and not "ReleaseNotes" &&
+					args.NavPathParam is not null and not "Settings")
 				{
 					var correctPageType = FolderSettings.GetLayoutType(args.NavPathParam, false);
 					if (!entry.SourcePageType.Equals(correctPageType))
@@ -603,7 +605,9 @@ namespace Files.App.Views.Shells
 			foreach (PageStackEntry entry in ItemDisplay.ForwardStack.ToList())
 			{
 				if (entry.Parameter is NavigationArguments args &&
-					args.NavPathParam is not null and not "Home")
+					args.NavPathParam is not null and not "Home" &&
+					args.NavPathParam is not null and not "ReleaseNotes" &&
+					args.NavPathParam is not null and not "Settings")
 				{
 					var correctPageType = FolderSettings.GetLayoutType(args.NavPathParam, false);
 					if (!entry.SourcePageType.Equals(correctPageType))
@@ -759,7 +763,7 @@ namespace Files.App.Views.Shells
 		protected void SelectSidebarItemFromPath(Type incomingSourcePageType = null)
 		{
 			if (incomingSourcePageType == typeof(HomePage) && incomingSourcePageType is not null)
-				ToolbarViewModel.PathControlDisplayText = "Home".GetLocalizedResource();
+				ToolbarViewModel.PathControlDisplayText = Strings.Home.GetLocalizedResource();
 		}
 
 		protected void SetLoadingIndicatorForTabs(bool isLoading)
@@ -802,6 +806,8 @@ namespace Files.App.Views.Shells
 
 		public abstract void NavigateHome();
 
+		public abstract void NavigateToReleaseNotes();
+
 		public abstract void NavigateToPath(string? navigationPath, Type? sourcePageType, NavigationArguments? navArgs = null);
 
 		private void UpdateDateDisplayTimer_Tick(object sender, object e)
@@ -831,7 +837,6 @@ namespace Files.App.Views.Shells
 			ToolbarViewModel.ToolbarPathItemLoaded -= ShellPage_ToolbarPathItemLoaded;
 			ToolbarViewModel.AddressBarTextEntered -= ShellPage_AddressBarTextEntered;
 			ToolbarViewModel.PathBoxItemDropped -= ShellPage_PathBoxItemDropped;
-			ToolbarViewModel.RefreshRequested -= ShellPage_RefreshRequested;
 			ToolbarViewModel.EditModeEnabled -= NavigationToolbar_EditModeEnabled;
 			ToolbarViewModel.ItemDraggedOverPathItem -= ShellPage_NavigationRequested;
 			ToolbarViewModel.PathBoxQuerySubmitted -= NavigationToolbar_QuerySubmitted;
